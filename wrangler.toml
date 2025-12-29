@@ -1,7 +1,3 @@
 name = "black-scholes"
 compatibility_date = "2025-12-29"
 compatibility_flags = ["nodejs_compat"]
-
-[pages_build_output_dir]
-command = "npm run build"
-dir = "dist"
