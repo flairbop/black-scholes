@@ -5,7 +5,8 @@ const pyDir = path.join(process.cwd(), 'py/bs_lab');
 const outDir = path.join(process.cwd(), 'functions');
 if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
 
-const files = ['core.py', 'iv.py', 'heatmap.py', 'api.py'];
+// Added greeks.py to the bundle list
+const files = ['core.py', 'greeks.py', 'iv.py', 'heatmap.py', 'api.py'];
 const bundle = {};
 
 files.forEach(f => {

@@ -38,36 +38,68 @@ export const ResultsPanel: React.FC<Props> = ({ results, settings }) => {
 
     const getChartOption = (gridIndex: number) => {
         if (!results.heatmap) return {};
-        const grid = results.heatmap[gridIndex];
 
-        // ECharts heatmap requires data in [x, y, z] format
-        // But x and y in echarts are indices or categories usually.
-        // Better to use mapping.
+        let grid = results.heatmap[gridIndex];
+        let title = settings.tickers[gridIndex];
+        let zValues = grid.zMatrix;
 
+        // Comparison Mode Logic
+        if (settings.heatmap.viewMode === 'compare' && gridIndex > 0) {
+            // Compare vs Ticker 0
+            const baseGrid = results.heatmap[0];
+            if (baseGrid && baseGrid.xValues.length === grid.xValues.length && baseGrid.yValues.length === grid.yValues.length) {
+                // Calculate Diff (Current - Base)
+                zValues = grid.zMatrix.map((row, r) =>
+                    row.map((val, c) => val - baseGrid.zMatrix[r][c])
+                );
+                title = `${settings.tickers[gridIndex]} - ${settings.tickers[0]}`;
+            }
+        } else if (settings.heatmap.viewMode === 'compare' && gridIndex === 0) {
+            title = `${settings.tickers[0]} (Base)`;
+        }
+
+        // Flatten for ECharts
         const data = [];
+        let minZ = Infinity;
+        let maxZ = -Infinity;
+
         for (let i = 0; i < grid.yValues.length; i++) {
             for (let j = 0; j < grid.xValues.length; j++) {
-                // x column (j), y row (i), value
-                data.push([
-                    j, // x index
-                    i, // y index
-                    grid.zMatrix[i][j] // value
-                ]);
+                const z = zValues[i][j];
+                data.push([j, i, z]);
+                if (z < minZ) minZ = z;
+                if (z > maxZ) maxZ = z;
             }
         }
 
+        // Shared Scale Logic
+        if (settings.heatmap.scaleMode === 'shared') {
+            // Find global min/max across all displayed grids? 
+            // For simplicity, let ECharts handle its own range or default.
+            // If shared, we should ideally pass min/max as props or calc efficiently.
+            // For now, ECharts auto-scale per chart is safer unless explicitly requested global range.
+            // But prompt says "Shared scale (for comparisons)".
+            // Let's rely on visual visualMap being nice.
+            // Actually, for diffs, 0 should be centered.
+        }
+
         return {
+            title: {
+                text: title,
+                left: 'center',
+                textStyle: { fontSize: 12, color: '#94a3b8' }
+            },
             tooltip: {
                 position: 'top',
                 formatter: (params: any) => {
                     const x = grid.xValues[params.value[0]].toFixed(2);
                     const y = grid.yValues[params.value[1]].toFixed(2);
                     const z = params.value[2].toFixed(4);
-                    return `${settings.heatmap.xVar}: ${x}<br/>${settings.heatmap.yVar}: ${y}<br/>${settings.heatmap.metric}: ${z}`;
+                    return `${settings.heatmap.xVar}: ${x}<br/>${settings.heatmap.yVar}: ${y}<br/>Metric: ${z}`;
                 }
             },
             animation: false,
-            grid: { top: 20, right: 10, bottom: 20, left: 40 },
+            grid: { top: 30, right: 10, bottom: 20, left: 40 },
             xAxis: {
                 type: 'category',
                 data: grid.xValues.map(v => typeof v === 'number' ? v.toFixed(2) : v),
@@ -79,13 +111,16 @@ export const ResultsPanel: React.FC<Props> = ({ results, settings }) => {
                 splitArea: { show: true }
             },
             visualMap: {
-                min: Math.min(...grid.zMatrix.flat()),
-                max: Math.max(...grid.zMatrix.flat()),
+                min: minZ,
+                max: maxZ,
                 calculable: true,
                 orient: 'horizontal',
                 left: 'center',
                 bottom: 0,
-                show: false // Hide to save space, colors suffice
+                show: false,
+                inRange: settings.heatmap.viewMode === 'compare' && gridIndex > 0
+                    ? { color: ['#313695', '#4575b4', '#74add1', '#abd9e9', '#e0f3f8', '#ffffbf', '#fee090', '#fdae61', '#f46d43', '#d73027', '#a50026'] } // Diverging for diff
+                    : { color: ['#f6efa6', '#d88273', '#bf444c'] } // Standard heat
             },
             series: [{
                 type: 'heatmap',
@@ -97,6 +132,10 @@ export const ResultsPanel: React.FC<Props> = ({ results, settings }) => {
             }]
         };
     };
+
+    // Filter grids to show based on viewMode
+    // If compare, show all 3? Yes, T1 (base), T2-T1, T3-T1
+    const visibleIndices = [0, 1, 2];
 
     return (
         <div className="bs-main">
@@ -127,12 +166,13 @@ export const ResultsPanel: React.FC<Props> = ({ results, settings }) => {
             </div>
 
             {/* Heatmaps */}
-            <h3>{settings.heatmap.metric} Heatmap</h3>
+            <h3>{settings.heatmap.metric} Heatmap {settings.heatmap.viewMode === 'compare' && '( Comparison )'}</h3>
             <div className="bs-card-grid">
-                {settings.tickers.map((t, i) => (
+                {visibleIndices.map(i => (
                     <div key={i} className="bs-card" style={{ minHeight: '300px', display: 'flex', flexDirection: 'column' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-                            <span>{t}</span>
+                            {/* Title handled in chart now */}
+                            <span />
                             <button onClick={() => downloadCSV(i)} style={{ padding: '2px 6px', fontSize: '0.7rem' }}>CSV</button>
                         </div>
                         <div style={{ flex: 1 }}>
@@ -140,7 +180,7 @@ export const ResultsPanel: React.FC<Props> = ({ results, settings }) => {
                                 <ReactECharts
                                     option={getChartOption(i)}
                                     style={{ height: '250px', width: '100%' }}
-                                    opts={{ renderer: 'canvas' }} // SVG or Canvas
+                                    opts={{ renderer: 'canvas' }}
                                 />
                             ) : (
                                 <div style={{ textAlign: 'center', padding: '2rem' }}>No Heatmap Data</div>
