@@ -1,5 +1,7 @@
 # Black-Scholes Lab
 
+https://black-scholes-9ju.pages.dev/black-scholes-lab
+
 ## Overview
 A high-performance interactive option pricing laboratory running entirely on Cloudflare (Pages + Workers).
 Features a Python-based compute engine (via Pyodide) running serverlessly in the browser/worker.
